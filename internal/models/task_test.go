@@ -1,4 +1,4 @@
-package model_test
+package models_test
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/go-redis/redismock/v8"
 	"github.com/google/uuid"
-	"github.com/hellodhlyn/tenri-api/internal/model"
+	"github.com/hellodhlyn/tenri-api/internal/models"
 	"github.com/hellodhlyn/tenri-api/internal/utils"
 	"time"
 
@@ -29,13 +29,13 @@ func TestGetTasks(t *testing.T) {
 	mock.ExpectZRange("tasks.list", 0, -1).SetVal(uuids)
 	mock.ExpectMGet(utils.MapSlice[string, string](uuids, func(each string) string { return "tasks.task." + each })...).
 		SetVal(utils.MapSlice[string, interface{}](uuids, func(each string) interface{} {
-			bytes, _ := json.Marshal(&model.Task{
+			bytes, _ := json.Marshal(&models.Task{
 				UUID: each, Text: faker.Sentence(), DueAt: time.Now().Add(24 * time.Hour), CreatedAt: time.Now(),
 			})
 			return string(bytes)
 		}))
 
-	results, err := model.GetTasks(ctx, rdb)
+	results, err := models.GetTasks(ctx, rdb)
 	if err != nil {
 		t.Error(err)
 	}
@@ -55,7 +55,7 @@ func TestSaveTask_Create(t *testing.T) {
 	rdb, mock := redismock.NewClientMock()
 
 	now := time.Now().Round(time.Second)
-	task := model.Task{
+	task := models.Task{
 		UUID:      uuid.New().String(),
 		Text:      faker.Sentence(),
 		DueAt:     now.Add(24 * time.Hour),
@@ -74,7 +74,26 @@ func TestSaveTask_Create(t *testing.T) {
 	mock.ExpectZAdd("tasks.list", &redis.Z{Score: float64(task.DueAt.Unix()), Member: task.UUID}).SetVal(1)
 	mock.ExpectTxPipelineExec()
 
-	err := model.SaveTask(ctx, rdb, &task)
+	err := models.SaveTask(ctx, rdb, &task)
+	if err != nil {
+		t.Error(err)
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestDeleteTask(t *testing.T) {
+	ctx := context.TODO()
+	rdb, mock := redismock.NewClientMock()
+
+	dummyUUID := uuid.New().String()
+	mock.ExpectTxPipeline()
+	mock.ExpectDel("tasks.task." + dummyUUID).SetVal(1)
+	mock.ExpectZRem("tasks.list", dummyUUID).SetVal(1)
+	mock.ExpectTxPipelineExec()
+
+	err := models.DeleteTask(ctx, rdb, dummyUUID)
 	if err != nil {
 		t.Error(err)
 	}

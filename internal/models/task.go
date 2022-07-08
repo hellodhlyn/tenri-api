@@ -1,9 +1,10 @@
-package model
+package models
 
 import (
 	"context"
 	"encoding/json"
 	"github.com/go-redis/redis/v8"
+	"github.com/google/uuid"
 	"github.com/hellodhlyn/tenri-api/internal/utils"
 	"time"
 )
@@ -18,10 +19,21 @@ type Task struct {
 const taskListKey = "tasks.list"
 const taskKeyPrefix = "tasks.task."
 
+func NewTask(text string, dueAt time.Time) *Task {
+	return &Task{
+		UUID:      uuid.New().String(),
+		Text:      text,
+		DueAt:     dueAt.Round(time.Second),
+		CreatedAt: time.Now().Round(time.Second),
+	}
+}
+
 func GetTasks(ctx context.Context, rdb *redis.Client) ([]Task, error) {
 	uuids, err := rdb.ZRange(ctx, taskListKey, 0, -1).Result()
 	if err != nil {
 		return nil, err
+	} else if len(uuids) == 0 {
+		return []Task{}, nil
 	}
 
 	keys := utils.MapSlice[string, string](uuids, func(each string) string { return taskKeyPrefix + each })
@@ -49,6 +61,15 @@ func SaveTask(ctx context.Context, rdb *redis.Client, task *Task) error {
 			Score:  float64(task.DueAt.Unix()),
 			Member: task.UUID,
 		})
+		return nil
+	})
+	return err
+}
+
+func DeleteTask(ctx context.Context, rdb *redis.Client, uuid string) error {
+	_, err := rdb.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		pipe.Del(ctx, taskKeyPrefix+uuid)
+		pipe.ZRem(ctx, taskListKey, uuid)
 		return nil
 	})
 	return err
