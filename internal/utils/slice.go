@@ -7,3 +7,12 @@ func MapSlice[S any, D any](src []S, fn func(S) D) []D {
 	}
 	return dst
 }
+
+func FindFirstSlice[S any](src []S, fn func(S) bool) (*S, bool) {
+	for _, each := range src {
+		if fn(each) {
+			return &each, true
+		}
+	}
+	return nil, false
+}

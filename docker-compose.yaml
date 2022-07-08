@@ -1,0 +1,13 @@
+version: '3'
+
+services:
+  tenri-redis:
+    image: redis:6
+    container_name: tenri-redis
+    networks:
+      - tenri-net
+    ports:
+      - '6379:6379'
+
+networks:
+  tenri-net:
